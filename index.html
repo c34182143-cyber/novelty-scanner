@@ -71,7 +71,6 @@
 <div id="status" class="status-waiting">待機中...</div>
 
 <script>
-  // ここだけ書き換える
   const GAS_URL = 'https://script.google.com/a/macros/enrission.jp/s/AKfycbztpNfvKenLNEOEXyjDPCNjk5jAk8seC6VxLmcV948t9u1Jg5uiO8qL8e0abm8pYu0j/exec';
 
   const COOLDOWN_MS = 2500;
@@ -106,11 +105,12 @@
       setStatus('⚠ カメラが使えません: ' + err.message, 'error');
     });
 
-  async function sendToGAS(qr) {
+  // JSONP方式でGASに送信（CORS回避）
+  function sendToGAS(qr) {
     setStatus('送信中...', '');
-    try {
-      const res  = await fetch(GAS_URL + '?qr=' + encodeURIComponent(qr));
-      const data = await res.json();
+    const callbackName = 'cb_' + Date.now();
+    window[callbackName] = function(data) {
+      document.getElementById('cb-script') && document.getElementById('cb-script').remove();
       if (data.ok) {
         document.getElementById('store-name').textContent = data.storeName;
         document.getElementById('store-info').textContent = '案件ID: ' + data.projectId + '　店舗番号: ' + data.storeNo;
@@ -120,9 +120,13 @@
       } else {
         setStatus('⚠ エラー: ' + data.error, 'error');
       }
-    } catch(e) {
-      setStatus('⚠ 通信エラー。ネットを確認してください。', 'error');
-    }
+      delete window[callbackName];
+    };
+    const script = document.createElement('script');
+    script.id  = 'cb-script';
+    script.src = GAS_URL + '?callback=' + callbackName + '&qr=' + encodeURIComponent(qr);
+    script.onerror = () => setStatus('⚠ 通信エラー。ネットを確認してください。', 'error');
+    document.body.appendChild(script);
   }
 
   function setStatus(msg, type) {
